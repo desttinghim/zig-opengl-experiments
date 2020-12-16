@@ -2,6 +2,7 @@ const std = @import("std");
 const zwl = @import("zwl");
 const gl = @import("gl");
 const TriangleRender = @import("./triangle.zig").TriangleRender;
+const TextRender = @import("./text.zig").TextRender;
 
 var gpa = std.heap.GeneralPurposeAllocator(.{}){};
 const global_allocator = &gpa.allocator;
@@ -49,8 +50,11 @@ pub fn main() !void {
     std.log.info("OpenGL Renderer: {}", .{std.mem.span(gl.getString(gl.RENDERER))});
 
     // Initialize and triangle renderer
-    const triangle = try TriangleRender.init(global_allocator);
-    defer triangle.deinit();
+    // const triangle = try TriangleRender.init(global_allocator);
+    // defer triangle.deinit();
+
+    const text = try TextRender.init(global_allocator);
+    defer text.deinit();
 
     // Run the main loop:
 
@@ -79,7 +83,12 @@ pub fn main() !void {
         };
 
         if (repaint) {
-            triangle.render();
+            gl.clearColor(0.3, 0.3, 0.3, 1.0);
+            gl.clear(gl.COLOR_BUFFER_BIT);
+
+            // triangle.render();
+            text.render();
+
             try window.present();
         }
     }

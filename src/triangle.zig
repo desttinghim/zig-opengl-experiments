@@ -84,9 +84,6 @@ pub const TriangleRender = struct {
     }
 
     pub fn render(this: @This()) void {
-        gl.clearColor(0.3, 0.3, 0.3, 1.0);
-        gl.clear(gl.COLOR_BUFFER_BIT);
-
         gl.useProgram(this.shader_program);
         gl.bindVertexArray(this.vao);
 
