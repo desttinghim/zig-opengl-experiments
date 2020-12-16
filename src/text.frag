@@ -4,6 +4,8 @@ in highp vec2 uv;
 
 layout(location = 0) out highp vec4 color;
 
+uniform sampler2D fontTexture;
+
 void main() {
-  color = vec4(uv, 0.0, 1.0);
+  color = texture(fontTexture, uv);
 }

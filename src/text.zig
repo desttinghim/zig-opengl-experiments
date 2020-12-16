@@ -13,9 +13,9 @@ pub const TextRender = struct {
     program: gl.GLuint,
     vertex_array_object: gl.GLuint,
     vertex_buffer_object: gl.GLuint,
-    // font_texture: gl.GLuint,
+    font_texture: gl.GLuint,
 
-    pub fn init(allocator: *std.mem.Allocator) !@This() {
+    pub fn init(allocator: *std.mem.Allocator, texture: gl.GLuint) !@This() {
         const program = try glUtil.compileShader(
             allocator,
             @embedFile("text.vert"),
@@ -91,7 +91,7 @@ pub const TextRender = struct {
             .program = program,
             .vertex_array_object = vao,
             .vertex_buffer_object = vbo,
-            // .font_texture =
+            .font_texture = texture,
         };
     }
 
@@ -103,8 +103,8 @@ pub const TextRender = struct {
 
     pub fn render(this: @This()) void {
         gl.useProgram(this.program);
+        gl.bindTexture(gl.TEXTURE_2D, this.font_texture);
         gl.bindVertexArray(this.vertex_array_object);
-
         gl.drawArrays(gl.TRIANGLES, 0, 6);
     }
 };

@@ -10,6 +10,11 @@ const pkgs = struct {
         .name = "gl",
         .path = "deps/opengl/gl.zig",
     };
+
+    const zigimg = std.build.Pkg{
+        .name = "zigimg",
+        .path = "deps/zigimg/zigimg.zig",
+    };
 };
 
 pub fn build(b: *std.build.Builder) void {
@@ -30,6 +35,7 @@ pub fn build(b: *std.build.Builder) void {
     exe.setBuildMode(mode);
     exe.addPackage(pkgs.zwl);
     exe.addPackage(pkgs.gl);
+    exe.addPackage(pkgs.zigimg);
     exe.install();
 
     exe.linkLibC();

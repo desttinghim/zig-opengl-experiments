@@ -1,3 +1,6 @@
 [submodule "deps/ZWL"]
 	path = deps/zwl
 	url = https://github.com/Aransentin/ZWL/
+[submodule "deps/zigimg"]
+	path = deps/zigimg
+	url = https://github.com/zigimg/zigimg
