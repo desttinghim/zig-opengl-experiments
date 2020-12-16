@@ -1,6 +1,8 @@
 const std = @import("std");
 const gl = @import("gl");
 const glUtil = @import("./gl_util.zig");
+const math = @import("zigmath");
+const Mat4f = math.Mat4(f32);
 
 const Vertex = extern struct {
     x: f32,
@@ -14,6 +16,8 @@ pub const TextRender = struct {
     vertex_array_object: gl.GLuint,
     vertex_buffer_object: gl.GLuint,
     font_texture: gl.GLuint,
+    projectionMatrixUniform: gl.GLint,
+    // modelMatrixUniform: gl.GLint,
 
     pub fn init(allocator: *std.mem.Allocator, texture: gl.GLuint) !@This() {
         const program = try glUtil.compileShader(
@@ -30,38 +34,38 @@ pub const TextRender = struct {
         {
             const vertices = [_]Vertex{
                 Vertex{ // top left
-                    .x = -0.5,
-                    .y = 0.5,
+                    .x = 0,
+                    .y = 0,
                     .u = 0,
                     .v = 0,
                 },
                 Vertex{ // bot left
-                    .x = -0.5,
-                    .y = -0.5,
+                    .x = 0,
+                    .y = 100,
                     .u = 0,
                     .v = 1,
                 },
                 Vertex{ // top right
-                    .x = 0.5,
-                    .y = 0.5,
+                    .x = 100,
+                    .y = 0,
                     .u = 1,
                     .v = 0,
                 },
                 Vertex{ // bot left
-                    .x = -0.5,
-                    .y = -0.5,
+                    .x = 0,
+                    .y = 100,
                     .u = 0,
                     .v = 1,
                 },
                 Vertex{ // top right
-                    .x = 0.5,
-                    .y = 0.5,
+                    .x = 100,
+                    .y = 0,
                     .u = 1,
                     .v = 0,
                 },
                 Vertex{ // bot right
-                    .x = 0.5,
-                    .y = -0.5,
+                    .x = 100,
+                    .y = 100,
                     .u = 1,
                     .v = 1,
                 },
@@ -87,11 +91,16 @@ pub const TextRender = struct {
         gl.vertexAttribPointer(1, 2, gl.FLOAT, gl.FALSE, @sizeOf(Vertex), @intToPtr(?*const c_void, @byteOffsetOf(Vertex, "u")));
         gl.bindBuffer(gl.ARRAY_BUFFER, 0);
 
+        const projection = gl.getUniformLocation(program, "mvp");
+        // const model = gl.getUniformLocation(program, "model");
+
         return @This(){
             .program = program,
             .vertex_array_object = vao,
             .vertex_buffer_object = vbo,
             .font_texture = texture,
+            .projectionMatrixUniform = projection,
+            // .modelMatrixUniform = model,
         };
     }
 
@@ -103,7 +112,14 @@ pub const TextRender = struct {
 
     pub fn render(this: @This()) void {
         gl.useProgram(this.program);
+
         gl.bindTexture(gl.TEXTURE_2D, this.font_texture);
+
+        // const perspective = Mat4f.orthographic(0, 1280, 720, 0, -1, 1);
+        const perspective = Mat4f.ortho(1280, 720);
+        gl.uniformMatrix4fv(this.projectionMatrixUniform, 1, gl.FALSE, &perspective.v);
+        // gl.uniformMatrix4fv(this.modelMatrixUniform, 1, gl.FALSE, &math.Mat4(f32).ident().v);
+
         gl.bindVertexArray(this.vertex_array_object);
         gl.drawArrays(gl.TRIANGLES, 0, 6);
     }

@@ -15,6 +15,11 @@ const pkgs = struct {
         .name = "zigimg",
         .path = "deps/zigimg/zigimg.zig",
     };
+
+    const zigmath = std.build.Pkg{
+        .name = "zigmath",
+        .path = "deps/zigmath/math.zig",
+    };
 };
 
 pub fn build(b: *std.build.Builder) void {
@@ -36,6 +41,7 @@ pub fn build(b: *std.build.Builder) void {
     exe.addPackage(pkgs.zwl);
     exe.addPackage(pkgs.gl);
     exe.addPackage(pkgs.zigimg);
+    exe.addPackage(pkgs.zigmath);
     exe.install();
 
     exe.linkLibC();
