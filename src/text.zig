@@ -11,15 +11,31 @@ const Vertex = extern struct {
     v: f32,
 };
 
+const Bounds = struct {
+    left: f64,
+    right: f64,
+    top: f64,
+    bottom: f64,
+};
+
+const GlyphInfo = struct {
+    unicode: u64,
+    advance: f64,
+    atlasBounds: Bounds,
+    planeBounds: Bounds,
+};
+
 pub const TextRender = struct {
     program: gl.GLuint,
     vertex_array_object: gl.GLuint,
     vertex_buffer_object: gl.GLuint,
     font_texture: gl.GLuint,
+    font_info: []GlyphInfo,
     projectionMatrixUniform: gl.GLint,
     // modelMatrixUniform: gl.GLint,
 
-    pub fn init(allocator: *std.mem.Allocator, texture: gl.GLuint) !@This() {
+    /// Font should be the name of the font texture and csv minus their extensions
+    pub fn init(allocator: *std.mem.Allocator, fontPath: []const u8) !@This() {
         const program = try glUtil.compileShader(
             allocator,
             @embedFile("text.vert"),
@@ -41,31 +57,31 @@ pub const TextRender = struct {
                 },
                 Vertex{ // bot left
                     .x = 0,
-                    .y = 100,
+                    .y = 720,
                     .u = 0,
                     .v = 1,
                 },
                 Vertex{ // top right
-                    .x = 100,
+                    .x = 1280,
                     .y = 0,
                     .u = 1,
                     .v = 0,
                 },
                 Vertex{ // bot left
                     .x = 0,
-                    .y = 100,
+                    .y = 720,
                     .u = 0,
                     .v = 1,
                 },
                 Vertex{ // top right
-                    .x = 100,
+                    .x = 1280,
                     .y = 0,
                     .u = 1,
                     .v = 0,
                 },
                 Vertex{ // bot right
-                    .x = 100,
-                    .y = 100,
+                    .x = 1280,
+                    .y = 720,
                     .u = 1,
                     .v = 1,
                 },
@@ -98,7 +114,8 @@ pub const TextRender = struct {
             .program = program,
             .vertex_array_object = vao,
             .vertex_buffer_object = vbo,
-            .font_texture = texture,
+            .font_texture = try glUtil.loadTexture(allocator, fontPath),
+            .font_info = undefined,
             .projectionMatrixUniform = projection,
             // .modelMatrixUniform = model,
         };
