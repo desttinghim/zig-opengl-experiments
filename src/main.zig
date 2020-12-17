@@ -54,7 +54,7 @@ pub fn main() !void {
     // const triangle = try TriangleRender.init(global_allocator);
     // defer triangle.deinit();
 
-    const text = try TextRender.init(global_allocator, "assets/adobe-source-code-pro-atlas.png");
+    const text = try TextRender.init(global_allocator, "assets/adobe-source-code-pro");
     defer text.deinit();
 
     // Run the main loop:

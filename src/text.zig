@@ -12,10 +12,10 @@ const Vertex = extern struct {
 };
 
 const Bounds = struct {
-    left: f64,
-    right: f64,
-    top: f64,
-    bottom: f64,
+    left: f32,
+    right: f32,
+    top: f32,
+    bottom: f32,
 };
 
 const GlyphInfo = struct {
@@ -25,12 +25,63 @@ const GlyphInfo = struct {
     planeBounds: Bounds,
 };
 
+const AtlasType = enum {
+    msdf,
+};
+
+const AtlasMetrics = struct {
+    lineHeight: f32,
+    ascender: f32,
+    descender: f32,
+    underlineY: f32,
+    underlineThickness: f32,
+};
+
+const AtlasGlyph = struct {
+    unicode: u32,
+    advance: f32,
+    planeBounds: ?Bounds = null,
+    atlasBounds: ?Bounds = null,
+};
+
+const AtlasDescription = struct {
+    @"type": []const u8, // AtlasType,
+    distanceRange: f32,
+    size: f32,
+    width: u64,
+    height: u64,
+    yOrigin: []const u8,
+};
+
+const AtlasFile = struct {
+    atlas: AtlasDescription,
+    metrics: AtlasMetrics,
+    glyphs: []AtlasGlyph,
+    kerning: []const u8,
+};
+
+fn atlasParse(allocator: *std.mem.Allocator, path: []const u8) !AtlasFile {
+    const cwd = std.fs.cwd();
+    const atlas_contents = try cwd.readFileAlloc(allocator, path, 50000);
+    defer allocator.free(atlas_contents);
+
+    var tokenStream = std.json.TokenStream.init(atlas_contents);
+
+    const jsonOpt = .{
+        .allocator = allocator,
+    };
+    var atlasFile = try std.json.parse(AtlasFile, &tokenStream, jsonOpt);
+    // defer std.json.parseFree(AtlasFile, atlasFile, jsonOpt);
+
+    return atlasFile;
+}
+
 pub const TextRender = struct {
     program: gl.GLuint,
     vertex_array_object: gl.GLuint,
     vertex_buffer_object: gl.GLuint,
     font_texture: gl.GLuint,
-    font_info: []GlyphInfo,
+    atlas_file: AtlasFile,
     projectionMatrixUniform: gl.GLint,
     // modelMatrixUniform: gl.GLint,
 
@@ -42,48 +93,83 @@ pub const TextRender = struct {
             @embedFile("text.frag"),
         );
 
+        const texturePath = try std.fmt.allocPrint(allocator, "{}.png", .{fontPath});
+        defer allocator.free(texturePath);
+        const atlasPath = try std.fmt.allocPrint(allocator, "{}.json", .{fontPath});
+        defer allocator.free(atlasPath);
+        const atlas_file = try atlasParse(allocator, atlasPath);
+
         var vbo: gl.GLuint = 0;
         gl.genBuffers(1, &vbo);
         if (vbo == 0)
             return error.OpenGlFailure;
 
         {
+            const width = @intToFloat(f32, atlas_file.atlas.width);
+            const height = @intToFloat(f32, atlas_file.atlas.height);
+            var bounds = Bounds{
+                .left = 0,
+                .right = 1,
+                .top = 0,
+                .bottom = 1,
+            };
+            if (atlas_file.glyphs[1].atlasBounds) |atlasBounds| {
+                bounds = atlasBounds;
+                bounds.left = bounds.left / width;
+                bounds.right = bounds.right / width;
+                bounds.top = 1 - (bounds.top / height);
+                bounds.bottom = 1 - (bounds.bottom / height);
+            }
+            var plane = Bounds{
+                .left = 0,
+                .right = 1,
+                .top = 0,
+                .bottom = 1,
+            };
+            if (atlas_file.glyphs[1].planeBounds) |planeBounds| {
+                plane = planeBounds;
+                const size = atlas_file.atlas.size;
+                plane.left = plane.left * size;
+                plane.right = plane.right * size;
+                plane.top = 720 - (plane.top * size);
+                plane.bottom = 720 - (plane.bottom * size);
+            }
             const vertices = [_]Vertex{
                 Vertex{ // top left
-                    .x = 0,
-                    .y = 0,
-                    .u = 0,
-                    .v = 0,
+                    .x = plane.left,
+                    .y = plane.top,
+                    .u = bounds.left,
+                    .v = bounds.top,
                 },
                 Vertex{ // bot left
-                    .x = 0,
-                    .y = 720,
-                    .u = 0,
-                    .v = 1,
+                    .x = plane.left,
+                    .y = plane.bottom,
+                    .u = bounds.left,
+                    .v = bounds.bottom,
                 },
                 Vertex{ // top right
-                    .x = 1280,
-                    .y = 0,
-                    .u = 1,
-                    .v = 0,
+                    .x = plane.right,
+                    .y = plane.top,
+                    .u = bounds.right,
+                    .v = bounds.top,
                 },
                 Vertex{ // bot left
-                    .x = 0,
-                    .y = 720,
-                    .u = 0,
-                    .v = 1,
+                    .x = plane.left,
+                    .y = plane.bottom,
+                    .u = bounds.left,
+                    .v = bounds.bottom,
                 },
                 Vertex{ // top right
-                    .x = 1280,
-                    .y = 0,
-                    .u = 1,
-                    .v = 0,
+                    .x = plane.right,
+                    .y = plane.top,
+                    .u = bounds.right,
+                    .v = bounds.top,
                 },
                 Vertex{ // bot right
-                    .x = 1280,
-                    .y = 720,
-                    .u = 1,
-                    .v = 1,
+                    .x = plane.right,
+                    .y = plane.bottom,
+                    .u = bounds.right,
+                    .v = bounds.bottom,
                 },
             };
 
@@ -114,8 +200,8 @@ pub const TextRender = struct {
             .program = program,
             .vertex_array_object = vao,
             .vertex_buffer_object = vbo,
-            .font_texture = try glUtil.loadTexture(allocator, fontPath),
-            .font_info = undefined,
+            .font_texture = try glUtil.loadTexture(allocator, texturePath),
+            .atlas_file = atlas_file,
             .projectionMatrixUniform = projection,
             // .modelMatrixUniform = model,
         };
