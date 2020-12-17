@@ -18,4 +18,6 @@ void main() {
   sigDist *= dot(msdfUnit, 0.5/fwidth(uv));
   mediump float opacity = clamp(sigDist + 0.5, 0.0, 1.0);
   color = mix(vec4(0.0, 0.0, 0.0, 0.0), vec4(1.0, 1.0, 1.0, 1.0), opacity);
+  // if (color.a < 0.001)
+  //   discard;
 }

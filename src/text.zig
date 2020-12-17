@@ -2,7 +2,10 @@ const std = @import("std");
 const gl = @import("gl");
 const glUtil = @import("./gl_util.zig");
 const math = @import("zigmath");
+const Vec2f = math.Vec(2, f32);
+const vec2f = Vec2f.init;
 const Mat4f = math.Mat4(f32);
+const ArrayList = std.ArrayList;
 
 const Vertex = extern struct {
     x: f32,
@@ -18,11 +21,10 @@ const Bounds = struct {
     bottom: f32,
 };
 
-const GlyphInfo = struct {
-    unicode: u64,
-    advance: f64,
-    atlasBounds: Bounds,
-    planeBounds: Bounds,
+const Glyph = struct {
+    advance: f32,
+    atlasBounds: ?Bounds,
+    planeBounds: ?Bounds,
 };
 
 const AtlasType = enum {
@@ -71,18 +73,20 @@ fn atlasParse(allocator: *std.mem.Allocator, path: []const u8) !AtlasFile {
         .allocator = allocator,
     };
     var atlasFile = try std.json.parse(AtlasFile, &tokenStream, jsonOpt);
-    // defer std.json.parseFree(AtlasFile, atlasFile, jsonOpt);
 
     return atlasFile;
 }
 
 pub const TextRender = struct {
+    allocator: *std.mem.Allocator,
     program: gl.GLuint,
     vertex_array_object: gl.GLuint,
     vertex_buffer_object: gl.GLuint,
     font_texture: gl.GLuint,
     atlas_file: AtlasFile,
+    glyph_map: std.AutoHashMap(u32, Glyph),
     projectionMatrixUniform: gl.GLint,
+    elements: gl.GLint,
     // modelMatrixUniform: gl.GLint,
 
     /// Font should be the name of the font texture and csv minus their extensions
@@ -98,83 +102,90 @@ pub const TextRender = struct {
         const atlasPath = try std.fmt.allocPrint(allocator, "{}.json", .{fontPath});
         defer allocator.free(atlasPath);
         const atlas_file = try atlasParse(allocator, atlasPath);
+        var glyph_map = std.AutoHashMap(u32, Glyph).init(allocator);
+
+        for (atlas_file.glyphs) |atlasGlyph| {
+            const glyph = Glyph{
+                .advance = atlasGlyph.advance,
+                .atlasBounds = atlasGlyph.atlasBounds,
+                .planeBounds = atlasGlyph.planeBounds,
+            };
+            try glyph_map.put(atlasGlyph.unicode, glyph);
+        }
 
         var vbo: gl.GLuint = 0;
         gl.genBuffers(1, &vbo);
         if (vbo == 0)
             return error.OpenGlFailure;
+        var elements: gl.GLint = 0;
 
         {
+            var vertices = ArrayList(Vertex).init(allocator);
             const width = @intToFloat(f32, atlas_file.atlas.width);
             const height = @intToFloat(f32, atlas_file.atlas.height);
-            var bounds = Bounds{
-                .left = 0,
-                .right = 1,
-                .top = 0,
-                .bottom = 1,
-            };
-            if (atlas_file.glyphs[1].atlasBounds) |atlasBounds| {
-                bounds = atlasBounds;
+            const size = atlas_file.atlas.size;
+            var cursor = vec2f(100, 100);
+            const string = "Hello, World!";
+            for (string) |char| {
+                const glyph = glyph_map.get(char) orelse unreachable;
+                defer cursor.x += glyph.advance * size;
+
+                var bounds = glyph.atlasBounds orelse continue;
                 bounds.left = bounds.left / width;
                 bounds.right = bounds.right / width;
                 bounds.top = 1 - (bounds.top / height);
                 bounds.bottom = 1 - (bounds.bottom / height);
+
+                var plane = glyph.planeBounds orelse continue;
+                plane.left = cursor.x + plane.left * size;
+                plane.right = cursor.x + plane.right * size;
+                plane.top = cursor.y - (plane.top * size);
+                plane.bottom = cursor.y - (plane.bottom * size);
+
+                try vertices.appendSlice(&[_]Vertex{
+                    Vertex{ // top left
+                        .x = plane.left,
+                        .y = plane.top,
+                        .u = bounds.left,
+                        .v = bounds.top,
+                    },
+                    Vertex{ // bot left
+                        .x = plane.left,
+                        .y = plane.bottom,
+                        .u = bounds.left,
+                        .v = bounds.bottom,
+                    },
+                    Vertex{ // top right
+                        .x = plane.right,
+                        .y = plane.top,
+                        .u = bounds.right,
+                        .v = bounds.top,
+                    },
+                    Vertex{ // bot left
+                        .x = plane.left,
+                        .y = plane.bottom,
+                        .u = bounds.left,
+                        .v = bounds.bottom,
+                    },
+                    Vertex{ // top right
+                        .x = plane.right,
+                        .y = plane.top,
+                        .u = bounds.right,
+                        .v = bounds.top,
+                    },
+                    Vertex{ // bot right
+                        .x = plane.right,
+                        .y = plane.bottom,
+                        .u = bounds.right,
+                        .v = bounds.bottom,
+                    },
+                });
             }
-            var plane = Bounds{
-                .left = 0,
-                .right = 1,
-                .top = 0,
-                .bottom = 1,
-            };
-            if (atlas_file.glyphs[1].planeBounds) |planeBounds| {
-                plane = planeBounds;
-                const size = atlas_file.atlas.size;
-                plane.left = plane.left * size;
-                plane.right = plane.right * size;
-                plane.top = 720 - (plane.top * size);
-                plane.bottom = 720 - (plane.bottom * size);
-            }
-            const vertices = [_]Vertex{
-                Vertex{ // top left
-                    .x = plane.left,
-                    .y = plane.top,
-                    .u = bounds.left,
-                    .v = bounds.top,
-                },
-                Vertex{ // bot left
-                    .x = plane.left,
-                    .y = plane.bottom,
-                    .u = bounds.left,
-                    .v = bounds.bottom,
-                },
-                Vertex{ // top right
-                    .x = plane.right,
-                    .y = plane.top,
-                    .u = bounds.right,
-                    .v = bounds.top,
-                },
-                Vertex{ // bot left
-                    .x = plane.left,
-                    .y = plane.bottom,
-                    .u = bounds.left,
-                    .v = bounds.bottom,
-                },
-                Vertex{ // top right
-                    .x = plane.right,
-                    .y = plane.top,
-                    .u = bounds.right,
-                    .v = bounds.top,
-                },
-                Vertex{ // bot right
-                    .x = plane.right,
-                    .y = plane.bottom,
-                    .u = bounds.right,
-                    .v = bounds.bottom,
-                },
-            };
+
+            elements = @intCast(gl.GLint, vertices.items.len);
 
             gl.bindBuffer(gl.ARRAY_BUFFER, vbo);
-            gl.bufferData(gl.ARRAY_BUFFER, vertices.len * @sizeOf(Vertex), &vertices, gl.STATIC_DRAW);
+            gl.bufferData(gl.ARRAY_BUFFER, @intCast(isize, vertices.items.len) * @sizeOf(Vertex), vertices.items.ptr, gl.STATIC_DRAW);
             gl.bindBuffer(gl.ARRAY_BUFFER, 0);
         }
 
@@ -197,12 +208,15 @@ pub const TextRender = struct {
         // const model = gl.getUniformLocation(program, "model");
 
         return @This(){
+            .allocator = allocator,
             .program = program,
             .vertex_array_object = vao,
             .vertex_buffer_object = vbo,
             .font_texture = try glUtil.loadTexture(allocator, texturePath),
             .atlas_file = atlas_file,
+            .glyph_map = glyph_map,
             .projectionMatrixUniform = projection,
+            .elements = elements,
             // .modelMatrixUniform = model,
         };
     }
@@ -211,9 +225,12 @@ pub const TextRender = struct {
         gl.deleteProgram(this.program);
         gl.deleteVertexArrays(1, &this.vertex_array_object);
         gl.deleteBuffers(1, &this.vertex_buffer_object);
+        std.json.parseFree(AtlasFile, this.atlas_file, .{ .allocator = this.allocator });
     }
 
     pub fn render(this: @This()) void {
+        gl.enable(gl.BLEND);
+        gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
         gl.useProgram(this.program);
 
         gl.bindTexture(gl.TEXTURE_2D, this.font_texture);
@@ -224,6 +241,6 @@ pub const TextRender = struct {
         // gl.uniformMatrix4fv(this.modelMatrixUniform, 1, gl.FALSE, &math.Mat4(f32).ident().v);
 
         gl.bindVertexArray(this.vertex_array_object);
-        gl.drawArrays(gl.TRIANGLES, 0, 6);
+        gl.drawArrays(gl.TRIANGLES, 0, this.elements);
     }
 };
