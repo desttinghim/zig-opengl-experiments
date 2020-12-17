@@ -115,8 +115,8 @@ pub const TextRender = struct {
 
         gl.bindTexture(gl.TEXTURE_2D, this.font_texture);
 
-        // const perspective = Mat4f.orthographic(0, 1280, 720, 0, -1, 1);
-        const perspective = Mat4f.ortho(1280, 720);
+        const perspective = Mat4f.orthographic(0, 1280, 720, 0, -1, 1);
+        // const perspective = Mat4f.orthoScreen(1280, 720);
         gl.uniformMatrix4fv(this.projectionMatrixUniform, 1, gl.FALSE, &perspective.v);
         // gl.uniformMatrix4fv(this.modelMatrixUniform, 1, gl.FALSE, &math.Mat4(f32).ident().v);
 
