@@ -1,6 +1,9 @@
 const std = @import("std");
 const zwl = @import("zwl");
 const gl = @import("gl");
+const math = @import("zigmath");
+const Vec2f = math.Vec(2, f32);
+const vec2f = Vec2f.init;
 const zigimg = @import("zigimg");
 const TriangleRender = @import("./triangle.zig").TriangleRender;
 const TextRender = @import("./text.zig").TextRender;
@@ -54,7 +57,8 @@ pub fn main() !void {
     // const triangle = try TriangleRender.init(global_allocator);
     // defer triangle.deinit();
 
-    const text = try TextRender.init(global_allocator, "assets/adobe-source-code-pro");
+    var text = try TextRender.init(global_allocator, "assets/adobe-source-code-pro");
+    try text.setText(vec2f(10, 10), vec2f(640, 480), "Hello, World! I am typing a bunch to see what happens");
     defer text.deinit();
 
     // Run the main loop:

@@ -117,77 +117,6 @@ pub const TextRender = struct {
         gl.genBuffers(1, &vbo);
         if (vbo == 0)
             return error.OpenGlFailure;
-        var elements: gl.GLint = 0;
-
-        {
-            var vertices = ArrayList(Vertex).init(allocator);
-            const width = @intToFloat(f32, atlas_file.atlas.width);
-            const height = @intToFloat(f32, atlas_file.atlas.height);
-            const size = atlas_file.atlas.size;
-            var cursor = vec2f(100, 100);
-            const string = "Hello, World!";
-            for (string) |char| {
-                const glyph = glyph_map.get(char) orelse unreachable;
-                defer cursor.x += glyph.advance * size;
-
-                var bounds = glyph.atlasBounds orelse continue;
-                bounds.left = bounds.left / width;
-                bounds.right = bounds.right / width;
-                bounds.top = 1 - (bounds.top / height);
-                bounds.bottom = 1 - (bounds.bottom / height);
-
-                var plane = glyph.planeBounds orelse continue;
-                plane.left = cursor.x + plane.left * size;
-                plane.right = cursor.x + plane.right * size;
-                plane.top = cursor.y - (plane.top * size);
-                plane.bottom = cursor.y - (plane.bottom * size);
-
-                try vertices.appendSlice(&[_]Vertex{
-                    Vertex{ // top left
-                        .x = plane.left,
-                        .y = plane.top,
-                        .u = bounds.left,
-                        .v = bounds.top,
-                    },
-                    Vertex{ // bot left
-                        .x = plane.left,
-                        .y = plane.bottom,
-                        .u = bounds.left,
-                        .v = bounds.bottom,
-                    },
-                    Vertex{ // top right
-                        .x = plane.right,
-                        .y = plane.top,
-                        .u = bounds.right,
-                        .v = bounds.top,
-                    },
-                    Vertex{ // bot left
-                        .x = plane.left,
-                        .y = plane.bottom,
-                        .u = bounds.left,
-                        .v = bounds.bottom,
-                    },
-                    Vertex{ // top right
-                        .x = plane.right,
-                        .y = plane.top,
-                        .u = bounds.right,
-                        .v = bounds.top,
-                    },
-                    Vertex{ // bot right
-                        .x = plane.right,
-                        .y = plane.bottom,
-                        .u = bounds.right,
-                        .v = bounds.bottom,
-                    },
-                });
-            }
-
-            elements = @intCast(gl.GLint, vertices.items.len);
-
-            gl.bindBuffer(gl.ARRAY_BUFFER, vbo);
-            gl.bufferData(gl.ARRAY_BUFFER, @intCast(isize, vertices.items.len) * @sizeOf(Vertex), vertices.items.ptr, gl.STATIC_DRAW);
-            gl.bindBuffer(gl.ARRAY_BUFFER, 0);
-        }
 
         var vao: gl.GLuint = 0;
         gl.genVertexArrays(1, &vao);
@@ -216,7 +145,7 @@ pub const TextRender = struct {
             .atlas_file = atlas_file,
             .glyph_map = glyph_map,
             .projectionMatrixUniform = projection,
-            .elements = elements,
+            .elements = 0,
             // .modelMatrixUniform = model,
         };
     }
@@ -226,6 +155,80 @@ pub const TextRender = struct {
         gl.deleteVertexArrays(1, &this.vertex_array_object);
         gl.deleteBuffers(1, &this.vertex_buffer_object);
         std.json.parseFree(AtlasFile, this.atlas_file, .{ .allocator = this.allocator });
+    }
+
+    pub fn setText(this: *@This(), pos: Vec2f, limits: Vec2f, text: []const u8) !void {
+        var vertices = ArrayList(Vertex).init(this.allocator);
+        const width = @intToFloat(f32, this.atlas_file.atlas.width);
+        const height = @intToFloat(f32, this.atlas_file.atlas.height);
+        const size = this.atlas_file.atlas.size;
+        var cursor = pos;
+        for (text) |char| {
+            const glyph = this.glyph_map.get(char) orelse unreachable;
+            defer cursor.x += glyph.advance * size;
+
+            if (cursor.x > pos.x + limits.x) {
+                cursor.x = pos.x;
+                cursor.y += size;
+            }
+
+            var bounds = glyph.atlasBounds orelse continue;
+            bounds.left = bounds.left / width;
+            bounds.right = bounds.right / width;
+            bounds.top = 1 - (bounds.top / height);
+            bounds.bottom = 1 - (bounds.bottom / height);
+
+            var plane = glyph.planeBounds orelse continue;
+            plane.left = cursor.x + plane.left * size;
+            plane.right = cursor.x + plane.right * size;
+            plane.top = (cursor.y + size) - (plane.top * size);
+            plane.bottom = (cursor.y + size) - (plane.bottom * size);
+
+            try vertices.appendSlice(&[_]Vertex{
+                Vertex{ // top left
+                    .x = plane.left,
+                    .y = plane.top,
+                    .u = bounds.left,
+                    .v = bounds.top,
+                },
+                Vertex{ // bot left
+                    .x = plane.left,
+                    .y = plane.bottom,
+                    .u = bounds.left,
+                    .v = bounds.bottom,
+                },
+                Vertex{ // top right
+                    .x = plane.right,
+                    .y = plane.top,
+                    .u = bounds.right,
+                    .v = bounds.top,
+                },
+                Vertex{ // bot left
+                    .x = plane.left,
+                    .y = plane.bottom,
+                    .u = bounds.left,
+                    .v = bounds.bottom,
+                },
+                Vertex{ // top right
+                    .x = plane.right,
+                    .y = plane.top,
+                    .u = bounds.right,
+                    .v = bounds.top,
+                },
+                Vertex{ // bot right
+                    .x = plane.right,
+                    .y = plane.bottom,
+                    .u = bounds.right,
+                    .v = bounds.bottom,
+                },
+            });
+        }
+
+        this.elements = @intCast(gl.GLint, vertices.items.len);
+
+        gl.bindBuffer(gl.ARRAY_BUFFER, this.vertex_buffer_object);
+        gl.bufferData(gl.ARRAY_BUFFER, @intCast(isize, vertices.items.len) * @sizeOf(Vertex), vertices.items.ptr, gl.STATIC_DRAW);
+        gl.bindBuffer(gl.ARRAY_BUFFER, 0);
     }
 
     pub fn render(this: @This()) void {
